@@ -3,13 +3,13 @@ node_modules
 .pnp
 .pnp.js
 
-# Production Build
+# Production Build & Dist
 dist
 dist-ssr
 build
 *.local
 
-# Environment Variables (Secrets & Credentials)
+# Environment Variables (Never commit secrets)
 .env
 .env.*
 .env.local
@@ -22,11 +22,13 @@ build
 !.env.example
 !**/.env.example
 
-# Python
+# Python Caches & Environments
 __pycache__/
+**/*/__pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+**/.pytest_cache/
 venv/
 .venv/
 env/
@@ -34,6 +36,9 @@ env/
 .coverage
 htmlcov/
 .mypy_cache/
+
+# Reference & Scratch Files
+reference.html
 
 # Logs
 logs
