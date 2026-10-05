@@ -122,7 +122,14 @@ class StudentBase(BaseModel):
 
 class StudentCreate(StudentBase):
     """Request schema for creating a new student record."""
-    pass
+    initial_password: Optional[str] = Field(
+        default=None,
+        min_length=8,
+        max_length=128,
+        description="Optional initial login password for the student's authentication account",
+        examples=["StudentSecret123!"],
+    )
+
 
 
 class StudentUpdate(BaseModel):

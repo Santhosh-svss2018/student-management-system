@@ -65,6 +65,12 @@ class UserBase(BaseModel):
         description="User role (admin, teacher, or student)",
         examples=[UserRole.STUDENT],
     )
+    student_id: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="Linked institutional student identifier for student accounts",
+        examples=["STU-2026-001"],
+    )
     is_active: bool = Field(
         default=True,
         description="Whether the user account is active",
@@ -104,6 +110,7 @@ class UserUpdate(BaseModel):
     """Request schema for updating existing user attributes."""
     full_name: Optional[str] = Field(None, min_length=1, max_length=100)
     role: Optional[UserRole] = None
+    student_id: Optional[str] = Field(None, max_length=50)
     is_active: Optional[bool] = None
     password: Optional[str] = Field(None, min_length=8, max_length=128)
 
@@ -128,10 +135,15 @@ class UserInDB(BaseModel):
     email: EmailStr
     hashed_password: str = Field(..., description="Argon2 hashed password")
     role: UserRole = UserRole.STUDENT
+    student_id: Optional[str] = Field(default=None, description="Linked institutional student ID")
     is_active: bool = True
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         description="UTC timestamp of account creation",
+    )
+    updated_at: Optional[datetime] = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="UTC timestamp of last account update",
     )
 
     model_config = ConfigDict(
@@ -153,6 +165,7 @@ class UserResponse(BaseModel):
     full_name: str
     email: EmailStr
     role: UserRole
+    student_id: Optional[str] = None
     is_active: bool
     created_at: datetime
 
@@ -161,3 +174,30 @@ class UserResponse(BaseModel):
         arbitrary_types_allowed=True,
         from_attributes=True,
     )
+
+
+class AdminPasswordChangeRequest(BaseModel):
+    """Request schema for Admin changing another user's password."""
+    new_password: str = Field(
+        ...,
+        min_length=8,
+        max_length=128,
+        description="New plaintext user password (minimum 8 characters)",
+        examples=["NewSecurePassword123!"],
+    )
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        if not isinstance(v, str) or not v.strip():
+            raise ValueError("Password cannot be empty.")
+        if len(v.strip()) < 8:
+            raise ValueError("Password must be at least 8 characters long.")
+        return v
+
+
+class MessageResponse(BaseModel):
+    """Standard message response schema for successful mutations."""
+    message: str = Field(..., description="Human-readable response message")
+    status: str = Field(default="success", description="Status indicator")
+

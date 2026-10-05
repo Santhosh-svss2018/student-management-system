@@ -8,9 +8,16 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pymongo.database import Database
 
-from app.api.deps import get_db
-from app.models.user import UserCreate, UserResponse
+from app.api.deps import get_db, require_admin
+from app.models.user import (
+    AdminPasswordChangeRequest,
+    MessageResponse,
+    UserCreate,
+    UserInDB,
+    UserResponse,
+)
 from app.services.user_service import (
+    change_user_password,
     create_user,
     get_user_by_id,
     get_users,
@@ -40,6 +47,36 @@ def register_user(
     """
     user_db = create_user(db=db, user_in=user_in)
     return UserResponse.model_validate(user_db)
+
+
+@router.put(
+    "/{user_id}/password",
+    response_model=MessageResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Admin change user password",
+    description="Allows administrators to change passwords for student or teacher user accounts.",
+)
+def admin_change_password(
+    user_id: str,
+    password_in: AdminPasswordChangeRequest,
+    current_user: UserInDB = Depends(require_admin),
+    db: Database = Depends(get_db),
+) -> MessageResponse:
+    """
+    Admin-only endpoint for changing user passwords.
+    - Protected by require_admin RBAC dependency (Teachers & Students receive 403 Forbidden).
+    - Validates minimum 8-character password.
+    - Hashes password securely with Argon2.
+    - Updates users collection.
+    - Never returns password hashes or sensitive tokens.
+    """
+    change_user_password(
+        db=db,
+        user_identifier=user_id,
+        new_password=password_in.new_password,
+        current_admin=current_user,
+    )
+    return MessageResponse(message="Password changed successfully")
 
 
 @router.get(
@@ -80,3 +117,4 @@ def read_users(
     """
     users = get_users(db=db, skip=skip, limit=limit)
     return [UserResponse.model_validate(u) for u in users]
+

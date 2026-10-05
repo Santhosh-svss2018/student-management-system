@@ -14,7 +14,8 @@ import {
   RefreshCw,
   Loader2,
   XCircle,
-  AlertTriangle
+  AlertTriangle,
+  Key
 } from 'lucide-react';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
@@ -24,6 +25,7 @@ import Select from '../../components/common/Select';
 import Tabs from '../../components/common/Tabs';
 import Table, { TableHead, TableBody, TableRow, TableCell } from '../../components/common/Table';
 import Pagination from '../../components/common/Pagination';
+import ChangePasswordModal from '../../components/common/ChangePasswordModal';
 import { useAuth } from '../../context/AuthContext';
 import { studentService } from '../../services/studentService';
 
@@ -47,6 +49,9 @@ export function StudentDirectory() {
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState(null);
   const [feedback, setFeedback] = useState(null);
+
+  // Password management modal state
+  const [passwordTargetStudent, setPasswordTargetStudent] = useState(null);
 
   // Deactivation confirmation modal state
   const [studentToDeactivate, setStudentToDeactivate] = useState(null);
@@ -362,6 +367,17 @@ export function StudentDirectory() {
                           <Eye className="w-4 h-4" />
                         </button>
 
+                        {/* Change Password: Admin only */}
+                        {isAdmin && (
+                          <button
+                            onClick={() => setPasswordTargetStudent(student)}
+                            title="Change Password"
+                            className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                          >
+                            <Key className="w-4 h-4" />
+                          </button>
+                        )}
+
                         {/* Edit: Admin only */}
                         {isAdmin && (
                           <button
@@ -401,6 +417,15 @@ export function StudentDirectory() {
           onPageChange={setCurrentPage}
         />
       </Card>
+
+      {/* Admin Password Management Dialog */}
+      {isAdmin && passwordTargetStudent && (
+        <ChangePasswordModal
+          isOpen={Boolean(passwordTargetStudent)}
+          onClose={() => setPasswordTargetStudent(null)}
+          targetUser={passwordTargetStudent}
+        />
+      )}
 
       {/* Deactivate Confirmation Modal */}
       {studentToDeactivate && (

@@ -12,7 +12,8 @@ import {
   Users,
   Paperclip,
   AlertCircle,
-  Loader2
+  Loader2,
+  Key
 } from 'lucide-react';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
@@ -55,7 +56,9 @@ export function StudentForm({ mode = 'add' }) {
     guardianRelation: 'Father',
     guardianPhone: '',
     guardianEmail: '',
-    guardianOccupation: ''
+    guardianOccupation: '',
+    initial_password: '',
+    confirm_password: ''
   });
 
   // Fetch existing student for Edit mode
@@ -170,6 +173,20 @@ export function StudentForm({ mode = 'add' }) {
         await studentService.updateStudent(id, updatePayload);
         setSavedSuccess(true);
       } else {
+        // Initial password validation if supplied
+        if (formData.initial_password && formData.initial_password.trim()) {
+          if (formData.initial_password.trim().length < 8) {
+            setErrorMessage('Initial login password must be at least 8 characters long.');
+            setIsSubmitting(false);
+            return;
+          }
+          if (formData.initial_password !== formData.confirm_password) {
+            setErrorMessage('Initial login passwords do not match. Please verify.');
+            setIsSubmitting(false);
+            return;
+          }
+        }
+
         // Create Payload
         const createPayload = {
           student_id: (formData.student_id || formData.rollNo).trim(),
@@ -185,6 +202,10 @@ export function StudentForm({ mode = 'add' }) {
           address: formData.address?.trim() || null,
           is_active: Boolean(formData.is_active)
         };
+
+        if (formData.initial_password && formData.initial_password.trim()) {
+          createPayload.initial_password = formData.initial_password.trim();
+        }
 
         await studentService.createStudent(createPayload);
         setSavedSuccess(true);
@@ -337,6 +358,35 @@ export function StudentForm({ mode = 'add' }) {
                   rows={2}
                 />
               </div>
+
+              {/* Optional Initial Portal Password (New Enrollment Only) */}
+              {!isEdit && (
+                <div className="sm:col-span-2 pt-4 border-t border-outline-variant/40">
+                  <h4 className="font-bold text-xs text-on-surface mb-1 flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-primary" />
+                    Student Authentication & Portal Password (Optional)
+                  </h4>
+                  <p className="text-[11px] text-on-surface-variant mb-3 leading-relaxed">
+                    Set an initial password for the student account. If omitted, a default password (<span className="font-mono text-primary font-semibold">EduManage@&lt;StudentID&gt;</span>) is automatically generated and can be changed anytime by an Admin.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Input
+                      label="Initial Login Password"
+                      type="password"
+                      placeholder="Min. 8 characters (optional)"
+                      value={formData.initial_password || ''}
+                      onChange={(e) => handleChange('initial_password', e.target.value)}
+                    />
+                    <Input
+                      label="Confirm Initial Password"
+                      type="password"
+                      placeholder="Confirm initial password"
+                      value={formData.confirm_password || ''}
+                      onChange={(e) => handleChange('confirm_password', e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex justify-end mt-6">
               <Button variant="primary" size="sm" type="button" onClick={() => setActiveTab('academic')}>

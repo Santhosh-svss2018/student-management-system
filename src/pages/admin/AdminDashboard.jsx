@@ -14,11 +14,15 @@ import {
   AlertTriangle,
   Building2,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Key,
+  ShieldCheck,
+  UserCheck
 } from 'lucide-react';
 import Card, { StatCard } from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Badge from '../../components/common/Badge';
+import ChangePasswordModal from '../../components/common/ChangePasswordModal';
 import { useAuth } from '../../context/AuthContext';
 import { analyticsService } from '../../services/analyticsService';
 
@@ -30,6 +34,7 @@ export function AdminDashboard() {
   const [departments, setDepartments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [passwordTargetUser, setPasswordTargetUser] = useState(null);
 
   const fetchDashboardData = async () => {
     setIsLoading(true);
@@ -265,6 +270,58 @@ export function AdminDashboard() {
               </div>
             </div>
           </div>
+
+          {/* Faculty & Staff Account Management */}
+          <Card
+            title="Faculty & Teacher Account Security"
+            subtitle="Administrator password management for instructional staff"
+            headerAction={
+              <Badge variant="primary" size="sm">
+                {totalTeachers || 1} Faculty Staff
+              </Badge>
+            }
+          >
+            <div className="space-y-3">
+              {[
+                {
+                  id: 'FAC-001',
+                  name: 'Marcus Vance',
+                  email: 'marcus.vance@edumanage.edu',
+                  role: 'teacher',
+                  dept: 'Computer Science & Engineering',
+                  designation: 'Associate Professor'
+                }
+              ].map((faculty) => (
+                <div
+                  key={faculty.id}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/40 gap-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                      MV
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-xs sm:text-sm text-on-surface">{faculty.name}</p>
+                        <Badge variant="tertiary" size="sm">Faculty</Badge>
+                      </div>
+                      <p className="text-[11px] text-on-surface-variant">{faculty.email} • {faculty.dept}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={Key}
+                      onClick={() => setPasswordTargetUser(faculty)}
+                    >
+                      Change Password
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
         </div>
 
         {/* Right 4 Cols: AI Alert Widget & Recent Quick Info */}
@@ -331,6 +388,15 @@ export function AdminDashboard() {
           </Card>
         </div>
       </div>
+
+      {/* Admin Password Management Dialog */}
+      {passwordTargetUser && (
+        <ChangePasswordModal
+          isOpen={Boolean(passwordTargetUser)}
+          onClose={() => setPasswordTargetUser(null)}
+          targetUser={passwordTargetUser}
+        />
+      )}
     </div>
   );
 }

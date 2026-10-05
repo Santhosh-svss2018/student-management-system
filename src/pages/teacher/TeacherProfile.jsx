@@ -17,12 +17,15 @@ import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Badge from '../../components/common/Badge';
 import Tabs from '../../components/common/Tabs';
+import ChangePasswordModal from '../../components/common/ChangePasswordModal';
 import { useAuth } from '../../context/AuthContext';
 import { MOCK_FACULTY, MOCK_COURSES } from '../../data/mockData';
 
 export function TeacherProfile() {
   const [activeTab, setActiveTab] = useState('overview');
-  const { user } = useAuth();
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const { user, role } = useAuth();
+  const isAdmin = role === 'admin';
   const faculty = MOCK_FACULTY[0];
   const displayName = user?.full_name || faculty.name;
   const displayEmail = user?.email || faculty.email;
@@ -75,7 +78,17 @@ export function TeacherProfile() {
           </div>
         </div>
 
-        <div>
+        <div className="flex flex-col sm:flex-row items-center gap-2">
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              icon={Key}
+              onClick={() => setIsPasswordModalOpen(true)}
+            >
+              Change Password
+            </Button>
+          )}
           <Button variant="outline" size="sm">Edit Profile</Button>
         </div>
       </div>
@@ -198,8 +211,38 @@ export function TeacherProfile() {
                 </Badge>
               </div>
             ))}
+
+            {isAdmin && (
+              <div className="pt-4 border-t border-outline-variant/40 flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-sm text-on-surface">Faculty Authentication Credentials</p>
+                  <p className="text-xs text-on-surface-variant">Admin password management for {displayName}</p>
+                </div>
+                <Button
+                  variant="container"
+                  size="sm"
+                  icon={Key}
+                  onClick={() => setIsPasswordModalOpen(true)}
+                >
+                  Change Password
+                </Button>
+              </div>
+            )}
           </div>
         </Card>
+      )}
+
+      {/* Admin Password Management Dialog */}
+      {isAdmin && (
+        <ChangePasswordModal
+          isOpen={isPasswordModalOpen}
+          onClose={() => setIsPasswordModalOpen(false)}
+          targetUser={{
+            full_name: displayName,
+            email: displayEmail,
+            role: 'teacher'
+          }}
+        />
       )}
     </div>
   );

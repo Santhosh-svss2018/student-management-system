@@ -12,7 +12,9 @@ from fastapi import HTTPException, status
 from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError
 
+from app.core.security import get_password_hash
 from app.models.student import StudentCreate, StudentInDB, StudentUpdate
+from app.models.user import UserRole
 
 logger = logging.getLogger("edumanage.services.student")
 
@@ -71,7 +73,9 @@ def get_student_by_identifier(db: Database, identifier: str) -> Optional[Student
 
 def create_student(db: Database, student_in: StudentCreate) -> StudentInDB:
     """
-    Creates and persists a new student document with uniqueness verification.
+    Creates and persists a new student document with uniqueness verification,
+    and automatically creates/links a corresponding authentication user account
+    in the users collection with Argon2 password hashing.
     """
     normalized_email = str(student_in.email).strip().lower()
     student_id = student_in.student_id.strip()
@@ -99,9 +103,19 @@ def create_student(db: Database, student_in: StudentCreate) -> StudentInDB:
             detail=f"Student with roll number '{roll_number}' already exists.",
         )
 
+    # Check whether the email already belongs to a non-student user account
+    existing_user = db.users.find_one({"email": normalized_email})
+    if existing_user and existing_user.get("role") != UserRole.STUDENT.value:
+        logger.warning("Email '%s' already belongs to a non-student user account.", normalized_email)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"An account with email '{normalized_email}' already exists.",
+        )
+
     now = datetime.now(timezone.utc)
+    student_data = student_in.model_dump(exclude={"initial_password"})
     student_db = StudentInDB(
-        **student_in.model_dump(),
+        **student_data,
         created_at=now,
         updated_at=now,
     )
@@ -110,14 +124,58 @@ def create_student(db: Database, student_in: StudentCreate) -> StudentInDB:
 
     try:
         db.students.insert_one(student_dict)
-        logger.info("Successfully created student: %s (%s)", student_id, student_in.full_name)
-        return student_db
     except DuplicateKeyError as exc:
         logger.warning("DuplicateKeyError on student insert: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A student with this student_id, email, or roll number already exists.",
         ) from exc
+
+    # Automatically create or link the user authentication account in users collection
+    try:
+        if existing_user:
+            # Link existing student user account to this student_id
+            db.users.update_one(
+                {"_id": existing_user["_id"]},
+                {
+                    "$set": {
+                        "student_id": student_id,
+                        "full_name": student_in.full_name,
+                        "updated_at": now,
+                    }
+                },
+            )
+            logger.info("Linked existing user '%s' to student_id: %s", normalized_email, student_id)
+        else:
+            initial_pwd = (
+                student_in.initial_password.strip()
+                if getattr(student_in, "initial_password", None) and student_in.initial_password.strip()
+                else f"EduManage@{student_id}"
+            )
+            hashed_pwd = get_password_hash(initial_pwd)
+            user_doc = {
+                "full_name": student_in.full_name,
+                "email": normalized_email,
+                "hashed_password": hashed_pwd,
+                "role": UserRole.STUDENT.value,
+                "student_id": student_id,
+                "is_active": student_in.is_active,
+                "created_at": now,
+                "updated_at": now,
+            }
+            db.users.insert_one(user_doc)
+            logger.info("Created student user authentication account: %s (student_id: %s)", normalized_email, student_id)
+    except Exception as exc:
+        # Rollback student creation on user creation failure to maintain data consistency
+        logger.error("Failed to create auth user for student %s. Rolling back student creation: %s", normalized_email, exc)
+        db.students.delete_one({"_id": student_db.id})
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create user authentication account: {str(exc)}",
+        ) from exc
+
+    logger.info("Successfully created student: %s (%s)", student_id, student_in.full_name)
+    return student_db
 
 
 def get_students(
@@ -166,7 +224,8 @@ def update_student(
     student_update: StudentUpdate,
 ) -> Optional[StudentInDB]:
     """
-    Updates specified fields of an existing student document.
+    Updates specified fields of an existing student document and synchronizes
+    full_name/email with the linked user authentication account.
     """
     existing = get_student_by_identifier(db, identifier)
     if not existing:
@@ -201,12 +260,29 @@ def update_student(
                 detail=f"Student with roll number '{update_dict['roll_number']}' already exists.",
             )
 
-    update_dict["updated_at"] = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    update_dict["updated_at"] = now
 
     try:
         db.students.update_one({"_id": existing.id}, {"$set": update_dict})
         updated_doc = db.students.find_one({"_id": existing.id})
-        return StudentInDB.model_validate(updated_doc)
+        updated_student = StudentInDB.model_validate(updated_doc)
+
+        # Synchronize user authentication record
+        user_sync = {"updated_at": now}
+        if "full_name" in update_dict:
+            user_sync["full_name"] = updated_student.full_name
+        if "email" in update_dict:
+            user_sync["email"] = updated_student.email
+        if "student_id" in update_dict:
+            user_sync["student_id"] = updated_student.student_id
+
+        db.users.update_one(
+            {"$or": [{"student_id": existing.student_id}, {"email": existing.email}]},
+            {"$set": user_sync},
+        )
+
+        return updated_student
     except DuplicateKeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -216,7 +292,8 @@ def update_student(
 
 def deactivate_student(db: Database, identifier: str) -> Optional[StudentInDB]:
     """
-    Soft-deletes a student record by setting is_active to False.
+    Soft-deletes a student record by setting is_active to False,
+    and deactivates the corresponding user authentication account.
     """
     existing = get_student_by_identifier(db, identifier)
     if not existing:
@@ -227,5 +304,13 @@ def deactivate_student(db: Database, identifier: str) -> Optional[StudentInDB]:
         {"_id": existing.id},
         {"$set": {"is_active": False, "updated_at": now}},
     )
+
+    # Deactivate corresponding user account
+    db.users.update_one(
+        {"$or": [{"student_id": existing.student_id}, {"email": existing.email}]},
+        {"$set": {"is_active": False, "updated_at": now}},
+    )
+
     updated_doc = db.students.find_one({"_id": existing.id})
     return StudentInDB.model_validate(updated_doc)
+

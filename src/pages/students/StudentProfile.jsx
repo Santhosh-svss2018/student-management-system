@@ -16,13 +16,15 @@ import {
   ShieldCheck,
   Clock,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Key
 } from 'lucide-react';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Badge from '../../components/common/Badge';
 import Tabs from '../../components/common/Tabs';
 import Table, { TableHead, TableBody, TableRow, TableCell } from '../../components/common/Table';
+import ChangePasswordModal from '../../components/common/ChangePasswordModal';
 import { useAuth } from '../../context/AuthContext';
 import { studentService } from '../../services/studentService';
 import { attendanceService } from '../../services/attendanceService';
@@ -43,6 +45,7 @@ export function StudentProfile() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('academic');
 
   useEffect(() => {
@@ -214,6 +217,17 @@ export function StudentProfile() {
           >
             {isExportingPdf ? 'Exporting PDF...' : 'Download Transcript'}
           </Button>
+          {/* Admin-only Password Management */}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              icon={Key}
+              onClick={() => setIsPasswordModalOpen(true)}
+            >
+              Change Password
+            </Button>
+          )}
           {/* Edit Button: Admin only */}
           {isAdmin && (
             <Button
@@ -491,6 +505,15 @@ export function StudentProfile() {
             </div>
           </Card>
         </div>
+      )}
+
+      {/* Admin Password Management Dialog */}
+      {isAdmin && (
+        <ChangePasswordModal
+          isOpen={isPasswordModalOpen}
+          onClose={() => setIsPasswordModalOpen(false)}
+          targetUser={student}
+        />
       )}
     </div>
   );
